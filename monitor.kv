@@ -1,0 +1,216 @@
+# root widget class
+<MainWidget>
+    BoxLayout:
+        orientation: 'vertical'
+        size: root.width, root.height
+
+        FloatLayout:
+            orientation: 'vertical'
+            size_hint: 1, 0.14
+            canvas.before:
+                Color:
+                    rgba:  0.498, 0.549, 0.667, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+
+            Label:
+                text: "ARDUINO MONITOR"
+                font_name: "fonts/Oswald-VariableFont_wght.ttf"
+                font_size: "34sp"
+                color: 0, 0, 0, 0.5  # темно-сіра тінь
+                pos_hint: {"center_x": 0.5, "center_y": 0.5}
+                size_hint: 1, 1
+                # зсув тіні трохи вниз-праворуч
+                canvas.before:
+                    PushMatrix
+                    Translate:
+                        x: 2
+                        y: -2
+                canvas.after:
+                    PopMatrix
+
+            Label:
+                text: "ARDUINO MONITOR"
+                font_name: "fonts/Oswald-VariableFont_wght.ttf"
+                font_size: "36sp"
+                color: 1, 1, 1, 1
+                pos_hint: {"center_x": 0.5, "center_y": 0.5}
+                size_hint: 1, 1
+
+        BoxLayout:
+            padding: [0, 5, 5, 0]  # [ліва, верх, право, низ]
+            id: table_container_top
+            orientation: 'horizontal'
+            size_hint: 1, 0.14
+            canvas.before:
+                Color:
+                    rgba: 0.5647, 0.9608, 0.9216, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+
+            BoxLayout:
+                id: table_temp
+                padding: [8, 0, 0, 0]  # [ліва, верх, право, низ]
+                spacing: dp(7)
+                size: root.height, root.width
+                orientation: 'horizontal'
+
+                canvas.before:
+                    Color:
+                        rgba: 0.5647, 0.9608, 0.9216, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+
+                Label:
+                    text: "Найвища\nтемпература:"
+                    text_size: None, self.height
+                    font_name: "fonts/Oswald-VariableFont_wght.ttf"
+                    # resiable font
+                    font_size: min(root.width * 0.032, sp(21))
+                    color: 0, 0, 0, 1
+                    size_hint: 0.4, 1
+                    # alignment
+                    halign: 'left'
+                    valign: 'middle'
+
+                MDCard:
+                    # temperature card
+                    orientation: "horizontal"
+                    size_hint: 0.8, 1
+                    spacing: "1dp"
+                    padding: "3dp"
+                    radius: [15, 15, 15, 15]
+#                    md_bg_color: 1, 1, 1, 1
+                    elevation: 3
+
+                    MDBoxLayout:
+                        orientation: "vertical"
+                        spacing: "1dp"
+                        MDLabel:
+                            text: "Темп."
+                            bold: True
+
+                        MDLabel:
+                            text: "Час"
+                            bold: True
+
+                        MDLabel:
+                            text: "Дата"
+                            bold: True
+
+
+                    MDBoxLayout:
+                        orientation: "vertical"
+                        spacing: "1dp"
+                        MDLabel:
+                            id: high_temp_value
+                            text: "- °C"
+
+                        MDLabel:
+                            id: high_temp_time
+                            text: "--:--"
+
+                        MDLabel:
+                            id: high_temp_date
+                            text: "--/--/----"
+
+
+            BoxLayout:
+                id: table_hum
+                padding: [10, 0, 0, 0]  # [ліва, верх, право, низ]
+                spacing: dp(7)
+                size: root.height, root.width
+                orientation: 'horizontal'
+                canvas.before:
+                    Color:
+                        rgba: 0.5647, 0.9608, 0.9216, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+
+                Label:
+                    text: "Найвища\nвологість:"
+                    text_size: None, self.height
+                    font_name: "fonts/Oswald-VariableFont_wght.ttf"
+                    # resiable font
+                    font_size: min(root.width * 0.035, sp(22))
+                    color: 0, 0, 0, 1
+                    size_hint: 0.4, 1
+                    # alignment
+                    halign: 'left'
+                    valign: 'middle'
+
+                MDCard:
+                    orientation: "horizontal"
+                    size_hint: 0.8, 1
+                    spacing: "1dp"
+                    padding: "3dp"
+                    radius: [15, 15, 15, 15]
+#                    md_bg_color: 1, 1, 1, 1
+                    elevation: 3
+
+                    MDBoxLayout:
+                        orientation: "vertical"
+                        spacing: "1dp"
+                        MDLabel:
+                            text: "Волог."
+                            bold: True
+
+                        MDLabel:
+                            text: "Час"
+                            bold: True
+
+                        MDLabel:
+                            text: "Дата"
+                            bold: True
+
+
+                    MDBoxLayout:
+                        orientation: "vertical"
+                        spacing: "1dp"
+                        MDLabel:
+                            id: high_hum_value
+                            text: "- %"
+
+                        MDLabel:
+                            id: high_hum_time
+                            text: "--:--"
+
+                        MDLabel:
+                            id: high_hum_date
+                            text: "--/--/----"
+
+
+
+        ScrollView:
+            size_hint: 1, 0.7
+            BoxLayout:
+                id: footer
+                padding: [0, 0, 0, 8]  # [ліва, верх, право, низ]
+                orientation: 'vertical'
+                canvas.before:
+                    Color:
+                        rgba: 0.918, 0.937, 0.937, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+                BoxLayout:
+                    AnchorLayout:
+                        anchor_x: 'center'
+                        anchor_y: 'center'
+                        id: table_container
+                        canvas.before:
+                            Color:
+#                               rgba: 0.498, 0.976, 0.514, 1
+                                rgba: 0.918, 0.937, 0.937, 1
+                            Rectangle:
+                                pos: self.pos
+                                size: self.size
+                        spacing: "12dp"
+                        padding: 8, 8
+                        orientation: 'vertical'
+                        size: root.width, root.height
+                        pos_hint: {"center_x": 0.5, "center_y": 0.5}
