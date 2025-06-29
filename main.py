@@ -2,6 +2,17 @@ import kivy
 kivy.require('2.0.0')
 # kivymd - 1.1.1
 
+from kivy.app import App
+from kivy.uix.widget import Widget
+from kivy.uix.scrollview import ScrollView
+from kivy.uix.button import Button
+from kivymd.app import MDApp
+from kivy.metrics import dp
+from kivymd.uix.datatables import MDDataTable
+from kivymd.uix.button import MDRaisedButton
+from kivymd.uix.screen import MDScreen
+from kivymd.uix.spinner import MDSpinner
+
 import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
@@ -9,24 +20,12 @@ logger.setLevel(logging.INFO)
 logging.getLogger("kivy").setLevel(logging.WARNING)
 logging.getLogger("kivymd").setLevel(logging.WARNING)
 
-from kivy.app import App
-from kivy.uix.widget import Widget
-from kivy.uix.scrollview import ScrollView
-from kivy.uix.button import Button
-from kivymd.app import MDApp
-
-from kivy.metrics import dp
-from kivymd.uix.datatables import MDDataTable
-from kivymd.uix.button import MDRaisedButton
-from kivymd.uix.screen import MDScreen
-from kivymd.uix.spinner import MDSpinner
-
+import json
 import asyncio
 from threading import Thread
-
-import json
-
 from telethon import TelegramClient
+from datetime import datetime, timedelta
+
 
 loop = asyncio.new_event_loop()
 
@@ -35,7 +34,9 @@ class MainWidget(Widget):
     pass
 
 # loads .kv file with monitor### name
-class Monitor(MDApp):
+class MessageAnalyser(MDApp):
+    startDate = datetime.now()
+    endDate = startDate - timedelta(30)
 
     def build(self):
 
@@ -73,17 +74,16 @@ class Monitor(MDApp):
             active=True
         )
 
-        button = MDRaisedButton(
-            text="Завантажити",
-            # size_hint=(1, 0.15),
-            size_hint=(0.8, 0.1),
+        buttonLogin = MDRaisedButton(
+            text="Підключитися та завантажити діалоги",
+            size_hint=(0.2, 0.8),
             pos_hint = {"center_x": 0.5},
-            font_style="H5",  # Більший і жирний текст
+            font_style="H5",
             md_bg_color=(0.224, 0.800, 0.776, 1),
-            on_release=self.loadButtonAction,
+            on_release=self.loginButtonAction,
         )
 
-        self.rootWidget.ids.footer.add_widget(button)
+        self.rootWidget.ids.buttonContainer.add_widget(buttonLogin)
 
         with open("credentials/creds.json") as f:
             config = json.load(f)
@@ -94,7 +94,7 @@ class Monitor(MDApp):
 
         return self.rootWidget
 
-    def loadButtonAction(self, instance):
+    def loginButtonAction(self, instance):
         asyncio.run_coroutine_threadsafe(self.loginToClient(), self.async_loop)
 
     async def loginToClient(self):
@@ -113,7 +113,7 @@ class Monitor(MDApp):
                 try:
                     await client.send_code_request(phoneNumber)
                 except Exception as e:
-                    print(f"[ERROR] Unexpected error: {e}")
+                    print(f"[ERROR] Unexpected error with request code: {e}")
                     return
 
                 verificationCode = input("Enter the code you received:")
@@ -122,21 +122,40 @@ class Monitor(MDApp):
                 try:
                     await client.sign_in(phoneNumber, verificationCode)
                 except Exception as e:
-                    print(f"[ERROR] Unexpected error: {e}")
+                    print(f"[ERROR] Unexpected error with signing in: {e}")
 
                     twoFactorCode = input("[DEBUG] 2FA:")
                     await client.sign_in(password=twoFactorCode)
 
-            # testing connection
-            print(await client.get_me().stringify())
-            await client.send_message('me', 'Hello to myself!')
+            print(f"[DEBUG] Start date: {self.startDate} | EndDate: {self.endDate}")
+
+            asyncio.run_coroutine_threadsafe(self.loadDialogsClient(client), self.async_loop)
 
         except Exception as e:
-            print(f"[ERROR] Unexpected error: {e}")
+            print(f"[ERROR] Unexpected error in loginToClient(): {e}")
 
-        finally:
-            if 'client' in locals():
-                client.disconnect()
+    async def loadDialogsClient(self, client):
+        try:
+            if not await client.is_user_authorized():
+                print(f"[ERROR] Client is not authorized")
+            else:
+                print(f"[DEBUG] Loading dialogs...")
+                dialogs = await client.get_dialogs(limit=10)
+                print(str(dialogs))
+                for dialog in dialogs:
+                    entity = dialog.entity
+                    print(
+                        f"Чат: {entity.title if hasattr(entity, 'title') else entity.username or entity.first_name}")
+
+                    async for message in client.iter_messages(entity, offset_date=self.endDate, reverse=True):
+                        print(f"[{message.date.strftime('%Y-%m-%d %H:%M')}] {message.sender_id}: {message.text}")
+
+                    print("=" * 40)
+
+        except Exception as e:
+            print(f"[ERROR] Unexpected error in loadDialogsClient() : {e}")
+
+
 
     def startLoop(self):
         asyncio.set_event_loop(self.async_loop)
@@ -158,4 +177,4 @@ class Monitor(MDApp):
 
 # run application
 if __name__ == '__main__':
-    Monitor().run()
+    MessageAnalyser().run()
