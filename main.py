@@ -26,7 +26,7 @@ from threading import Thread
 from telethon import TelegramClient
 from datetime import datetime, timedelta
 
-
+DIALOGS_TO_LOAD = 20
 loop = asyncio.new_event_loop()
 
 # declare .kv file as class to access it
@@ -35,8 +35,10 @@ class MainWidget(Widget):
 
 # loads .kv file with monitor### name
 class MessageAnalyser(MDApp):
+
     startDate = datetime.now()
     endDate = startDate - timedelta(30)
+    managerMessages = []
 
     def build(self):
 
@@ -140,16 +142,39 @@ class MessageAnalyser(MDApp):
                 print(f"[ERROR] Client is not authorized")
             else:
                 print(f"[DEBUG] Loading dialogs...")
-                dialogs = await client.get_dialogs(limit=10)
-                print(str(dialogs))
+
+                # first 10 dialogs
+                dialogs = await client.get_dialogs(limit=DIALOGS_TO_LOAD)
                 for dialog in dialogs:
+                    # print(f"[DEBUG] Dialogs loaded: {dialog.name}")
+                    print(f"{dialog.name}", end=" ")
+
+                clientUser = await client.get_me()
+                print(f'[DEBUG] clientUser id: {clientUser.id}\n')
+
+                # print("=" * 40)
+
+                for dialog in dialogs:
+
                     entity = dialog.entity
-                    print(
-                        f"Чат: {entity.title if hasattr(entity, 'title') else entity.username or entity.first_name}")
 
-                    async for message in client.iter_messages(entity, offset_date=self.endDate, reverse=True):
-                        print(f"[{message.date.strftime('%Y-%m-%d %H:%M')}] {message.sender_id}: {message.text}")
+                    if hasattr(entity, 'title'):
+                       chatName = entity.title
+                    elif entity.username:
+                        chatName = entity.first_name
+                    else:
+                        chatName = entity.username
 
+                    print(f"Чат/Отримувач: {chatName}")
+
+                    # chat/dialog entity, oldest date, reverse, sender id
+                    print(f'[DEBUG] client.iter_messages: {client.iter_messages}')
+                    try:
+                        # from_user = clientUser.id
+                        async for message in client.iter_messages(entity, offset_date=self.endDate, reverse=True):
+                            print(f"[{message.date.strftime('%H:%M %d-%m-%Y')}] {message.sender.username}:\n{message.text}\n")
+                    except Exception as e:
+                        print(f"[ERROR] Unexpected error when processing messages")
                     print("=" * 40)
 
         except Exception as e:
