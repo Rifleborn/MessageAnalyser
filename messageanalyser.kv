@@ -57,13 +57,15 @@
                     width: 300
                 BoxLayout:
                     id: buttonContainer
-                    size_hint: 1, 0.35
+                    size_hint: 0.4, 0.35
                     padding: [15, 8, 15, 8]  # [ліва, верх, право, низ]
                     orientation: 'horizontal'
                     spacing: 35  # space between buttons
+                    pos_hint: {"center_x": 0.5}
                     canvas.before:
                         Color:
                             rgba: 0.918, 0.937, 0.937, 1
+                            #rgba: 1, 0, 0, 1
                         Rectangle:
                             pos: self.pos
                             size: self.size

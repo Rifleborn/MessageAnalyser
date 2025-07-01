@@ -25,8 +25,12 @@ import asyncio
 from threading import Thread
 from telethon import TelegramClient
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
-DIALOGS_TO_LOAD = 20
+# from aiProcessor import processDialog
+from aiProcessorGemini import processDialog
+
+DIALOGS_TO_LOAD = 2
 loop = asyncio.new_event_loop()
 
 # declare .kv file as class to access it
@@ -36,9 +40,12 @@ class MainWidget(Widget):
 # loads .kv file with monitor### name
 class MessageAnalyser(MDApp):
 
+    # date range
     startDate = datetime.now()
     endDate = startDate - timedelta(30)
-    managerMessages = []
+
+    # dialogs that will be processed by AI
+    dialogsToProcess = []
 
     def build(self):
 
@@ -57,10 +64,10 @@ class MessageAnalyser(MDApp):
             pos_hint = {'center_x': 0.5, 'center_y': 0.5},
             # check=True,
             column_data=[
-                ("Час", dp(15)),
-                ("Дата", dp(19)),
-                ("Текст", dp(12)),
-                ("Номер", dp(17)),
+                ("Дата останнього\n   повідомлення", dp(28)),
+                ("Клієнт/чат", dp(22)),
+                ("Менеджер", dp(22)),
+                ("Клієнту\nвідповіли", dp(16)),
             ],
             row_data=[],
             elevation=2,
@@ -77,16 +84,17 @@ class MessageAnalyser(MDApp):
         )
 
         buttonLogin = MDRaisedButton(
-            text="Підключитися та завантажити діалоги",
-            size_hint=(0.2, 0.8),
-            pos_hint = {"center_x": 0.5},
-            font_style="H5",
+            text="Підключитися та \nзавантажити діалоги",
+            size_hint=(1, 1),
+            # pos_hint = {"center_x": 0.5},
+            font_style="H6",
             md_bg_color=(0.224, 0.800, 0.776, 1),
             on_release=self.loginButtonAction,
         )
 
         self.rootWidget.ids.buttonContainer.add_widget(buttonLogin)
 
+        # try
         with open("credentials/creds.json") as f:
             config = json.load(f)
 
@@ -101,6 +109,11 @@ class MessageAnalyser(MDApp):
 
     async def loginToClient(self):
         print('[DEBUG] --Connecting to telegram--')
+
+        try:
+            self.rootWidget.ids.table_container.add_widget(self.tableSpinner)
+        except Exception as e:
+            print(f"[ERROR] Unexpected error in loginToClient(): {e}")
 
         try:
             client = TelegramClient('default_session', self.rootWidget.ids.idField.text, self.rootWidget.ids.hashField.text)
@@ -143,42 +156,84 @@ class MessageAnalyser(MDApp):
             else:
                 print(f"[DEBUG] Loading dialogs...")
 
-                # first 10 dialogs
+                # get first N dialogs
                 dialogs = await client.get_dialogs(limit=DIALOGS_TO_LOAD)
-                for dialog in dialogs:
-                    # print(f"[DEBUG] Dialogs loaded: {dialog.name}")
-                    print(f"{dialog.name}", end=" ")
 
-                clientUser = await client.get_me()
-                print(f'[DEBUG] clientUser id: {clientUser.id}\n')
+                print(f"[DEBUG] Dialogs({len(dialogs)}) loaded:")
+
+                for dialog in dialogs:
+                    print(f"{dialog.name}", end=" ")
+                print(f'\n')
+
+                userInfo = await client.get_me()
+                clientId = userInfo.id
+                print(f'[DEBUG] Manager id: {clientId}\n')
 
                 # print("=" * 40)
 
                 for dialog in dialogs:
-
                     entity = dialog.entity
 
+                    # set proper chat name depends on type of it: channel/user
                     if hasattr(entity, 'title'):
                        chatName = entity.title
                     elif entity.username:
-                        chatName = entity.first_name
-                    else:
                         chatName = entity.username
+                    else:
+                        chatName = entity.first_name
 
-                    print(f"Чат/Отримувач: {chatName}")
+                    print(f"Чат/Отримувач: {chatName} | Повідомлення:\n")
 
-                    # chat/dialog entity, oldest date, reverse, sender id
-                    print(f'[DEBUG] client.iter_messages: {client.iter_messages}')
+
+                    specificDialog = {
+                        # "chat_id": entity.id,
+                        "chat_name": getattr(entity, 'title', None) or getattr(entity, 'first_name', None) or getattr(
+                            entity, 'username', None),
+                        "manager": userInfo.first_name or userInfo.username,
+                        "messages": []
+                    }
+
+                    # processing messages in chat
                     try:
-                        # from_user = clientUser.id
+                        # chat/dialog entity, oldest date, reverse
                         async for message in client.iter_messages(entity, offset_date=self.endDate, reverse=True):
-                            print(f"[{message.date.strftime('%H:%M %d-%m-%Y')}] {message.sender.username}:\n{message.text}\n")
+                            sender = await message.get_sender()
+                            local_time = message.date + timedelta(hours=3)  # UTC+3
+                            msgDate = local_time.strftime('%H:%M %d-%m-%Y')
+
+                            print(f"[{msgDate}] "
+                                  f"{sender.first_name if sender.first_name else sender.username}:\n"
+                                  f"{message.text}\n")
+
+                            specificDialog["messages"].append({
+                                "from": sender.username or sender.first_name,
+                                "is_from_manager": (sender.id == clientId),
+                                "date": str(msgDate),
+                                "text": message.text,
+                            })
+                            # end of for
+
+                        self.dialogsToProcess.append(specificDialog)
+                        print(f"[DEBUG] Date of last message: {specificDialog['messages'][-1]['date']}")
+                        specificDialog["lastdate"] = specificDialog['messages'][-1]['date']
+
                     except Exception as e:
-                        print(f"[ERROR] Unexpected error when processing messages")
-                    print("=" * 40)
+                        print(f"[ERROR] Unexpected error when processing messages : {e}")
+
+
+                    # separator for proper displaying dialogs in console
+                    print("=" * 50)
+                # end for
+
+                print(f"[DEBUG] Dialogs to process:\n{self.dialogsToProcess}")
+
+                # aiProcessor.py
+                processDialog(self, self.dialogsToProcess)
 
         except Exception as e:
             print(f"[ERROR] Unexpected error in loadDialogsClient() : {e}")
+        finally:
+            self.tableSpinner.opacity = 0
 
 
 
