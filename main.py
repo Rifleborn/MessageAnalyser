@@ -30,7 +30,7 @@ from zoneinfo import ZoneInfo
 # from aiProcessor import processDialog
 from aiProcessorGemini import processDialog
 
-DIALOGS_TO_LOAD = 2
+DIALOGS_TO_LOAD = 10
 loop = asyncio.new_event_loop()
 
 # declare .kv file as class to access it
