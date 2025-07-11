@@ -1,0 +1,7 @@
+credentials/
+fonts/
+default_session.session
+default_session.session-journal
+dialogLoader.py
+.idea
+ __pycache__/

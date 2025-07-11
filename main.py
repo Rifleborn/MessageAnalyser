@@ -24,9 +24,16 @@ import json
 import asyncio
 from threading import Thread
 from telethon import TelegramClient
+from telethon.tl.types import User, Channel, Chat
+
+
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
+# from aiProcessor import processDialog
+from aiProcessorGemini import processDialog
 
+DIALOGS_TO_LOAD = 2
 loop = asyncio.new_event_loop()
 
 # declare .kv file as class to access it
@@ -35,8 +42,13 @@ class MainWidget(Widget):
 
 # loads .kv file with monitor### name
 class MessageAnalyser(MDApp):
+
+    # date range
     startDate = datetime.now()
     endDate = startDate - timedelta(30)
+
+    # dialogs that will be processed by AI
+    dialogsToProcess = []
 
     def build(self):
 
@@ -55,10 +67,10 @@ class MessageAnalyser(MDApp):
             pos_hint = {'center_x': 0.5, 'center_y': 0.5},
             # check=True,
             column_data=[
-                ("Час", dp(15)),
-                ("Дата", dp(19)),
-                ("Текст", dp(12)),
-                ("Номер", dp(17)),
+                ("Дата останнього\n   повідомлення", dp(28)),
+                ("Клієнт/чат", dp(22)),
+                ("Менеджер", dp(22)),
+                ("Клієнту\nвідповіли", dp(16)),
             ],
             row_data=[],
             elevation=2,
@@ -75,16 +87,18 @@ class MessageAnalyser(MDApp):
         )
 
         buttonLogin = MDRaisedButton(
-            text="Підключитися та завантажити діалоги",
-            size_hint=(0.2, 0.8),
+            text="Підключитися та \nзавантажити діалоги",
+            size_hint=(None, None),
+            size=(250, 80),  # fixed size
             pos_hint = {"center_x": 0.5},
-            font_style="H5",
+            font_style="H6",
             md_bg_color=(0.224, 0.800, 0.776, 1),
             on_release=self.loginButtonAction,
         )
 
         self.rootWidget.ids.buttonContainer.add_widget(buttonLogin)
 
+        # try
         with open("credentials/creds.json") as f:
             config = json.load(f)
 
@@ -99,6 +113,11 @@ class MessageAnalyser(MDApp):
 
     async def loginToClient(self):
         print('[DEBUG] --Connecting to telegram--')
+
+        try:
+            self.rootWidget.ids.table_container.add_widget(self.tableSpinner)
+        except Exception as e:
+            print(f"[ERROR] Unexpected error in loginToClient(): {e}")
 
         try:
             client = TelegramClient('default_session', self.rootWidget.ids.idField.text, self.rootWidget.ids.hashField.text)
@@ -140,20 +159,101 @@ class MessageAnalyser(MDApp):
                 print(f"[ERROR] Client is not authorized")
             else:
                 print(f"[DEBUG] Loading dialogs...")
-                dialogs = await client.get_dialogs(limit=10)
-                print(str(dialogs))
+
+                # get first N dialogs
+                # uncomment
+                dialogs = await client.get_dialogs(limit=DIALOGS_TO_LOAD)
+
+                print(f"[DEBUG] Dialogs({len(dialogs)}) loaded:")
+
+                print(f'[DEBUG] Dialog title:')
+                for dialog in dialogs:
+                    print(f'{dialog.name}')
+                print('')
+
+                # remove channels from client dialogs
+                for dialog in dialogs[:]:
+                    print(f'{dialog.name} is channel: {isinstance(dialog.entity, Channel)}')
+                    # remove dialog if its type is Channel
+                    if isinstance(dialog.entity, Channel):
+                        dialogs.remove(dialog)
+
+                print(f"[DEBUG] Dialogs after removing chats/channels - ({len(dialogs)})")
+
+                userInfo = await client.get_me()
+                clientId = userInfo.id
+                print(f'[DEBUG] Manager name: {userInfo.username} | id: {clientId}\n')
+
+                # print("=" * 40)
+
                 for dialog in dialogs:
                     entity = dialog.entity
-                    print(
-                        f"Чат: {entity.title if hasattr(entity, 'title') else entity.username or entity.first_name}")
+                    dialogName = "Unknown chat"
 
-                    async for message in client.iter_messages(entity, offset_date=self.endDate, reverse=True):
-                        print(f"[{message.date.strftime('%Y-%m-%d %H:%M')}] {message.sender_id}: {message.text}")
+                    try:
+                        if isinstance(entity, User):
+                            dialogName = entity.first_name
+                            if entity.last_name:
+                                dialogName += f" {entity.last_name}"
+                        elif isinstance(entity, Channel) or isinstance(entity, Chat):
+                            if hasattr(entity, 'title'):
+                                dialogName = entity.title
+                            elif hasattr(entity, 'username'):
+                                dialogName = entity.username
+                    except Exception as e:
+                        print(f'[ERROR] Error with assigning name to dialog: {e}')
 
-                    print("=" * 40)
+                    print(f"Чат/Отримувач: {dialogName} | Повідомлення:\n")
+
+
+                    specificDialog = {
+                        # "chat_id": entity.id,
+                        "chat_name": dialogName,
+                        "manager": userInfo.first_name or userInfo.username,
+                        "messages": []
+                    }
+
+                    # processing messages in chat
+                    try:
+                        # chat/dialog entity, oldest date, reverse
+                        async for message in client.iter_messages(entity, offset_date=self.endDate, reverse=True):
+                            sender = await message.get_sender()
+                            local_time = message.date + timedelta(hours=3)  # UTC+3
+                            msgDate = local_time.strftime('%H:%M %d-%m-%Y')
+
+                            print(f"[{msgDate}] "
+                                  f"{sender.first_name if sender.first_name else sender.username}:\n"
+                                  f"{message.text}\n")
+
+                            specificDialog["messages"].append({
+                                "from": sender.username or sender.first_name,
+                                "is_from_manager": (sender.id == clientId),
+                                "date": str(msgDate),
+                                "text": message.text,
+                            })
+                            # end of for
+
+                        self.dialogsToProcess.append(specificDialog)
+                        print(f"[DEBUG] Date of last message: {specificDialog['messages'][-1]['date']}")
+                        specificDialog["lastdate"] = specificDialog['messages'][-1]['date']
+
+                    except Exception as e:
+                        print(f"[ERROR] Unexpected error when processing messages : {e}")
+
+
+                    # separator for proper displaying dialogs in console
+                    print("=" * 70)
+                # end for
+
+                print(f"[DEBUG] Dialogs to process:\n{self.dialogsToProcess}")
+
+                # aiProcessor.py
+                processDialog(self, self.dialogsToProcess)
 
         except Exception as e:
             print(f"[ERROR] Unexpected error in loadDialogsClient() : {e}")
+        finally:
+            self.tableSpinner.opacity = 0
 
 
 
