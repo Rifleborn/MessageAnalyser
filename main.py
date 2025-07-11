@@ -24,13 +24,16 @@ import json
 import asyncio
 from threading import Thread
 from telethon import TelegramClient
+from telethon.tl.types import User, Channel, Chat
+
+
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 # from aiProcessor import processDialog
 from aiProcessorGemini import processDialog
 
-DIALOGS_TO_LOAD = 10
+DIALOGS_TO_LOAD = 2
 loop = asyncio.new_event_loop()
 
 # declare .kv file as class to access it
@@ -85,8 +88,9 @@ class MessageAnalyser(MDApp):
 
         buttonLogin = MDRaisedButton(
             text="Підключитися та \nзавантажити діалоги",
-            size_hint=(1, 1),
-            # pos_hint = {"center_x": 0.5},
+            size_hint=(None, None),
+            size=(250, 80),  # fixed size
+            pos_hint = {"center_x": 0.5},
             font_style="H6",
             md_bg_color=(0.224, 0.800, 0.776, 1),
             on_release=self.loginButtonAction,
@@ -157,38 +161,54 @@ class MessageAnalyser(MDApp):
                 print(f"[DEBUG] Loading dialogs...")
 
                 # get first N dialogs
+                # uncomment
                 dialogs = await client.get_dialogs(limit=DIALOGS_TO_LOAD)
 
                 print(f"[DEBUG] Dialogs({len(dialogs)}) loaded:")
 
+                print(f'[DEBUG] Dialog title:')
                 for dialog in dialogs:
-                    print(f"{dialog.name}", end=" ")
-                print(f'\n')
+                    print(f'{dialog.name}')
+                print('')
+
+                # remove channels from client dialogs
+                for dialog in dialogs[:]:
+                    print(f'{dialog.name} is channel: {isinstance(dialog.entity, Channel)}')
+                    # remove dialog if its type is Channel
+                    if isinstance(dialog.entity, Channel):
+                        dialogs.remove(dialog)
+
+                print(f"[DEBUG] Dialogs after removing chats/channels - ({len(dialogs)})")
 
                 userInfo = await client.get_me()
                 clientId = userInfo.id
-                print(f'[DEBUG] Manager id: {clientId}\n')
+                print(f'[DEBUG] Manager name: {userInfo.username} | id: {clientId}\n')
 
                 # print("=" * 40)
 
                 for dialog in dialogs:
                     entity = dialog.entity
+                    dialogName = "Unknown chat"
 
-                    # set proper chat name depends on type of it: channel/user
-                    if hasattr(entity, 'title'):
-                       chatName = entity.title
-                    elif entity.username:
-                        chatName = entity.username
-                    else:
-                        chatName = entity.first_name
+                    try:
+                        if isinstance(entity, User):
+                            dialogName = entity.first_name
+                            if entity.last_name:
+                                dialogName += f" {entity.last_name}"
+                        elif isinstance(entity, Channel) or isinstance(entity, Chat):
+                            if hasattr(entity, 'title'):
+                                dialogName = entity.title
+                            elif hasattr(entity, 'username'):
+                                dialogName = entity.username
+                    except Exception as e:
+                        print(f'[ERROR] Error with assigning name to dialog: {e}')
 
-                    print(f"Чат/Отримувач: {chatName} | Повідомлення:\n")
+                    print(f"Чат/Отримувач: {dialogName} | Повідомлення:\n")
 
 
                     specificDialog = {
                         # "chat_id": entity.id,
-                        "chat_name": getattr(entity, 'title', None) or getattr(entity, 'first_name', None) or getattr(
-                            entity, 'username', None),
+                        "chat_name": dialogName,
                         "manager": userInfo.first_name or userInfo.username,
                         "messages": []
                     }
@@ -222,7 +242,7 @@ class MessageAnalyser(MDApp):
 
 
                     # separator for proper displaying dialogs in console
-                    print("=" * 50)
+                    print("=" * 70)
                 # end for
 
                 print(f"[DEBUG] Dialogs to process:\n{self.dialogsToProcess}")
